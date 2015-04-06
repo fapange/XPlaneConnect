@@ -5,7 +5,8 @@ addpath('../../MATLAB')
 import XPlaneConnect.*
 
 DREFS = {'sim/cockpit/switches/gear_handle_status'};
-value = randi([0 10]);
+%value = randi([0 10]);
+value = floor(11.*rand());
 
 sendDREF(DREFS{1},value);
 result = requestDREF(DREFS);
