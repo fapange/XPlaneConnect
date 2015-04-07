@@ -1,19 +1,17 @@
 %%
 
 import XPlaneConnect.*
-
-%%
-%fromXPLANE = openUDP(49005);
-%fromGCS = openUDP(49100);
-%toXPLANE = openUDP(49000);
-%toGCS = openUDP(49105);
+fromXPLANE = openUDP(49005);
+fromGCS = openUDP(49100);
+toXPLANE = openUDP(49000);
+toGCS = openUDP(49105);
 
 %%
 while 1
-    result = readUDP(49005);
-    sendUDP(result,'127.0.0.1',49105);
-    result = readUDP(49100);
-    sendUDP(result,'127.0.0.1',49000);
+    result = readUDP(fromXPLANE);
+    sendUDP(result,'127.0.0.1',toGCS);
+    result = readUDP(fromGCS);
+    sendUDP(result,'127.0.0.1',toXPLANE);
 end
 
 %%
