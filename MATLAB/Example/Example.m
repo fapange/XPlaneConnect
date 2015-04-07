@@ -11,29 +11,44 @@ import XPlaneConnect.*
 disp('xplaneconnect Example Script-');
 disp('Setting up Simulation');
 Socket = openUDP(49005);
+
 %% Set position of the player aircraft
 disp('Setting position');
- pauseSim(1);
 %       Lat     Lon         Alt   Pitch Roll Heading Gear
-POSI = [37.524, -122.06899, 2500, 0,    0,   0,      1];
+POSI = [36.684, -76.04, 2500, 0,    0,   0,      1];
 sendPOSI(POSI); % Set own aircraft position
 
 %       Lat     Lon           Alt   Pitch Roll Heading Gear
-POSI = [37.52465, -122.06899, 2500, 0,    20,  0,      1];
+POSI = [36.68465, -76.04, 2500, 0,    0,  0,      1];
 sendPOSI(POSI, 1); % Place another aircraft just north of us
+
 %% Set rates
 disp('Setting rates');
-%                  Alpha Velocity PQR
-data = struct('h',[18,   3,       16],...
-              'd',[0,-999,0,-999,-999,-999,-999,-999;... % Alpha data
-                   130,130,130,130,-999,-999,-999,-999;...  % Velocity data
-                   0,0,0,-999,-999,-999,-999,-999]);       % PQR data
+pauseSim(1);
+% %                  Alpha Velocity PQR
+% data = struct('h',[19,   3,       17],...
+%               'd',[0,-999,0,-999,-999,-999,-999,-999;... % Alpha data
+%                    130,130,130,130,-999,-999,-999,-999;...  % Velocity data
+%                    0,0,0,-999,-999,-999,-999,-999]);       % PQR data
+% sendDATA(data);
+%                  Alpha
+data = struct('h',[19],...
+              'd',[0,0,0,0,-999,-999,-999,0]);     % Alpha data
+sendDATA(data);
+%                  Velocity
+data = struct('h',[3],...
+              'd',[50,50,50,50,-999,-999,-999,-999]);   % Velocity data
+sendDATA(data);
+%                  PQR
+data = struct('h',[17],...
+              'd',[0,0,0,-999,-999,-999,-999,-999]);        % PQR data
 sendDATA(data);
  %% Set CTRL
  %                      Throttle
  CTRL = [0,0,0,0.8];
  sendCTRL(CTRL);
- pause(5);
+ 
+%% Run Simulation
  pauseSim(0);
  pause(5) % Run sim for 5 seconds
  %% Pause sim
@@ -51,13 +66,15 @@ sendDATA(data);
  %% Confirm gear and paus status by reading DREFs
  disp('Checking gear');
  pauseDREF = 'sim/operation/override/override_planepath';
- result = requestDREF({gearDREF, pauseDREF});
+%  result = requestDREF({gearDREF, pauseDREF});
+ result = requestDREF({gearDREF});
  if result{1} == 0
      disp('Gear stowed');
  else
      disp('Error stowing gear');
  end
- %% Exit
+
+%% Exit
  closeUDP(Socket);
  disp('--End of example program--');
  
