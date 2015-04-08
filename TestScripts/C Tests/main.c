@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
+#include <math.h>
 #include "xplaneconnect.h"
 
 int testFailed = 0;
@@ -81,6 +83,25 @@ short sendReadTest() // send/read Test
     }
     
     return 0;
+}
+
+short sendTEXTTest()
+{
+	printf("sendTEXT - ");
+
+	// Setup
+	struct xpcSocket sendPort = openUDP(49064, "127.0.0.1", 49009);
+	int x = 100;
+	int y = 700;
+	char* msg = "XPlaneConnect test message. Now with 100% fewer new lines!";
+
+	// Test
+	sendTEXT(sendPort, msg, x, y);
+	// NOTE: Manually verify that msg appears on the screen in X-Plane!
+
+	// Cleanup
+	closeUDP(sendPort);
+	return 0;
 }
 
 short requestDREFTest() // Request DREF Test (Required for next tests)
@@ -233,59 +254,118 @@ short sendDATATest() // sendDATA test
 
 short sendCTRLTest() // sendCTRL test
 {
-    printf("sendCTRL - ");
-    
-    // Initialize
-    int i; // Iterator
-    char DREFArray[100][100];
-    float CTRL[6] = {0.0};
-    float *recDATA[100];
-    short DREFSizes[100];
-    struct xpcSocket sendPort, recvPort;
-    short result;
-    
-    // Setup
-    for (i = 0; i < 100; i++) {
-        recDATA[i]   = (float *) malloc(40*sizeof(float));
-        memset(DREFArray[i],0,100);
-    }
-    sendPort = openUDP( 49066, "127.0.0.1", 49009 );
-    recvPort = openUDP( 49008, "127.0.0.1", 49009 );
-    strcpy(DREFArray[0],"sim/cockpit2/controls/yoke_pitch_ratio");
-    strcpy(DREFArray[1],"sim/cockpit2/controls/yoke_roll_ratio");
-    strcpy(DREFArray[2],"sim/cockpit2/controls/yoke_heading_ratio");
-    strcpy(DREFArray[3],"sim/flightmodel/engine/ENGN_thro");
-    strcpy(DREFArray[4],"sim/cockpit/switches/gear_handle_status");
-    strcpy(DREFArray[5],"sim/flightmodel/controls/flaprqst");
+	printf("sendCTRL - ");
+
+	// Initialize
+	int i; // Iterator
+	char DREFArray[100][100];
+	float CTRL[6] = { 0.0 };
+	float *recDATA[100];
+	short DREFSizes[100];
+	struct xpcSocket sendPort, recvPort;
+	short result;
+
+	// Setup
+	for (i = 0; i < 100; i++) {
+		recDATA[i] = (float *)malloc(40 * sizeof(float));
+		memset(DREFArray[i], 0, 100);
+	}
+	sendPort = openUDP(49066, "127.0.0.1", 49009);
+	recvPort = openUDP(49008, "127.0.0.1", 49009);
+	strcpy(DREFArray[0], "sim/cockpit2/controls/yoke_pitch_ratio");
+	strcpy(DREFArray[1], "sim/cockpit2/controls/yoke_roll_ratio");
+	strcpy(DREFArray[2], "sim/cockpit2/controls/yoke_heading_ratio");
+	strcpy(DREFArray[3], "sim/flightmodel/engine/ENGN_thro");
+	strcpy(DREFArray[4], "sim/cockpit/switches/gear_handle_status");
+	strcpy(DREFArray[5], "sim/flightmodel/controls/flaprqst");
 	for (i = 0; i < 100; i++) {
 		DREFSizes[i] = (int)strlen(DREFArray[i]);
 	}
-    CTRL[3] = 0.8; // Throttle
-    CTRL[4] = 1; // Gear
-    CTRL[5] = 0.5; // Flaps
-    
-    // Execute
-    sendCTRL(sendPort, 6, CTRL);
-    result = requestDREF(sendPort, recvPort, DREFArray, DREFSizes, 6, recDATA, DREFSizes); // Test
-    
-    // Close
-    closeUDP(sendPort);
-    closeUDP(recvPort);
-    
-    // Tests
-    if ( result < 0 )// Request 1 value
-    {
-        return -6;
-    }
-    for (i=0;i<6;i++)
-    {
-        if (fabs(recDATA[i][0]-CTRL[i])>1e-4)
-        {
-            return -i;
-        }
-    }
+	CTRL[3] = 0.8; // Throttle
+	CTRL[4] = 1; // Gear
+	CTRL[5] = 0.5; // Flaps
 
-    return 0;
+	// Execute
+	sendCTRL(sendPort, 6, CTRL);
+	result = requestDREF(sendPort, recvPort, DREFArray, DREFSizes, 6, recDATA, DREFSizes); // Test
+
+	// Close
+	closeUDP(sendPort);
+	closeUDP(recvPort);
+
+	// Tests
+	if (result < 0)// Request 1 value
+	{
+		return -6;
+	}
+	for (i = 0; i<6; i++)
+	{
+		if (fabs(recDATA[i][0] - CTRL[i])>1e-4)
+		{
+            return -i - 1;
+		}
+	}
+
+	return 0;
+}
+
+short sendpCTRLTest()
+{
+	printf("sendNonPlayerCTRL - ");
+
+	// Initialize
+	int i; // Iterator
+	char DREFArray[100][100];
+	float CTRL[6] = { 0.0 };
+	float *recDATA[100];
+	short DREFSizes[100];
+	struct xpcSocket sendPort, recvPort;
+	short result;
+
+	// Setup
+	for (i = 0; i < 100; i++)
+	{
+		recDATA[i] = (float *)malloc(40 * sizeof(float));
+		memset(DREFArray[i], 0, 100);
+	}
+	sendPort = openUDP(49066, "127.0.0.1", 49009);
+	recvPort = openUDP(49008, "127.0.0.1", 49009);
+	strcpy(DREFArray[0], "sim/multiplayer/position/plane1_yolk_pitch");
+	strcpy(DREFArray[1], "sim/multiplayer/position/plane1_yolk_roll");
+	strcpy(DREFArray[2], "sim/multiplayer/position/plane1_yolk_yaw");
+	strcpy(DREFArray[3], "sim/multiplayer/position/plane1_throttle");
+	strcpy(DREFArray[4], "sim/multiplayer/position/plane1_gear_deploy");
+	strcpy(DREFArray[5], "sim/multiplayer/position/plane1_flap_ratio");
+	for (i = 0; i < 100; i++)
+	{
+		DREFSizes[i] = (int)strlen(DREFArray[i]);
+	}
+	CTRL[3] = 0.8; // Throttle
+	CTRL[4] = 1; // Gear
+	CTRL[5] = 0.5; // Flaps
+
+	// Execute
+	sendpCTRL(sendPort, 6, CTRL, 1);
+	result = requestDREF(sendPort, recvPort, DREFArray, DREFSizes, 9, recDATA, DREFSizes); // Test
+
+	// Close
+	closeUDP(sendPort);
+	closeUDP(recvPort);
+
+	// Tests
+	if (result < 0)// Request 1 value
+	{
+		return -6;
+	}
+	for (i = 0; i<6; i++)
+	{
+		if (fabs(recDATA[i][0] - CTRL[i])>1e-4)
+		{
+			return -i - 1;
+		}
+	}
+
+	return 0;
 }
 
 short sendPOSITest() // sendPOSI test
@@ -482,14 +562,16 @@ int main(int argc, const char * argv[])
     
     runTest(openTest);
     runTest(closeTest);
-    runTest(sendReadTest);
+	runTest(sendReadTest);
+	runTest(sendTEXTTest);
     runTest(requestDREFTest);
     runTest(sendDREFTest);
-    runTest(sendDATATest);
-    runTest(sendCTRLTest);
+	runTest(sendDATATest);
+	runTest(sendCTRLTest);
+	runTest(sendpCTRLTest);
     runTest(sendPOSITest);
-    runTest(pauseTest);
-    runTest(connTest);
+	runTest(pauseTest);
+	runTest(connTest);
     
     printf( "----------------\nTest Summary\n\tFailed: %i\n\tPassed: %i\n", testFailed, testPassed );
     

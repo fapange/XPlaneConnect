@@ -68,6 +68,7 @@
 //#include "XPLMPlanes.h"
 #include "XPLMProcessing.h"
 #include "XPLMGraphics.h"
+#include "xpcDrawing.h"
 #include "xpcPluginTools.h"
 
 #ifdef _WIN32 /* WIN32 SYSTEM */
@@ -124,6 +125,7 @@ int handleGETD(char *buf);
 int handleDREF(char *buf);
 int handleVIEW();
 int handleDATA(char *buf, int buflen);
+int handleTEXT(char *buf, int len);
 short handleInput(struct XPCMessage * theMessage);
 
 char setPOSI(short aircraft, float pos[3]);
@@ -189,6 +191,8 @@ PLUGIN_API void XPluginDisable(void)
 	closeUDP(recSocket);
 	closeUDP(sendSocket);
 	updateLog(logmsg,strlen(logmsg));
+
+	XPCClearMessage();
 }
 
 PLUGIN_API int XPluginEnable(void)
@@ -369,6 +373,10 @@ short handleInput(struct XPCMessage * theMessage)
 		{
 			handleDATA(theMessage->msg, theMessage->msglen);
 		}
+		else if (strncmp(theMessage->head, "TEXT", 4) == 0) // Header = TEXT (Screen message)
+		{
+			handleTEXT(theMessage->msg, theMessage->msglen);
+		}
 		else if ((strncmp(theMessage->head,"DSEL",4)==0) || (strncmp(theMessage->head,"USEL",4)==0)) // Header = DSEL/USEL (Select UDP Send)
 		{
 			sendBUF(theMessage->msg,theMessage->msglen); // Send to UDP
@@ -409,13 +417,13 @@ short handleInput(struct XPCMessage * theMessage)
 		{
 			sendBUF(theMessage->msg,theMessage->msglen); // Send to UDP
 		}
-		else if (strncmp(theMessage->head,"BOAT",4)==0)
+		else if (strncmp(theMessage->head, "BOAT", 4) == 0)
 		{
-			sendBUF(theMessage->msg,theMessage->msglen); // Send to UDP
+			sendBUF(theMessage->msg, theMessage->msglen); // Send to UDP
 		}
 		else
 		{ //unrecognized header
-			sprintf(logmsg,"[EXEC] ERROR: Command %s not recognised",theMessage->head);
+			sprintf(logmsg,"[EXEC] ERROR: Command %s not recognized",theMessage->head);
 			updateLog(logmsg, strlen(logmsg));
 		}
 		current_connection = -1;
@@ -488,6 +496,31 @@ int handleSIMU(char buf[])
 		updateLog(logmsg,strlen(logmsg));
 	}
 	
+	return 0;
+}
+
+int handleTEXT(char *buf, int len)
+{
+	char msg[256] = { 0 };
+	if (len < 14)
+	{
+		updateLog("[TEXT] ERROR: Length less than 14 bytes", 39);
+		return -1;
+	}
+	size_t msgLen = (unsigned char)buf[13];
+	if (msgLen == 0)
+	{
+		XPCClearMessage();
+		updateLog("[TEXT] Text cleared", 19);
+	}
+	else
+	{
+		int x = *((int*)(buf + 5));
+		int y = *((int*)(buf + 9));
+		strncpy(msg, buf + 14, msgLen);
+		XPCSetMessage(x, y, msg);
+		updateLog("[TEXT] Text set", 15);
+	}
 	return 0;
 }
 
@@ -719,47 +752,79 @@ int handlePOSI(char buf[])
 int handleCTRL(char buf[])
 {
 	char logmsg[100];
-	float flaps;
-	float controls[4] = {0.0};
-	float throtArray[8] = {0};
+	xpcCtrl ctrl;
+	float thr[8] = { 0 };
 	short i;
-	short gear = -1;
 	
 	// UPDATE LOG
 	sprintf(logmsg,"[CTRL] Message Received (Conn %i)", current_connection+1);
 	updateLog(logmsg, strlen(logmsg));
 	
-	flaps = parseCTRL(buf,controls,&gear);
-	
-	if ( flaps != flaps ) // Is NaN
+	ctrl = parseCTRL(buf);
+	if (ctrl.aircraft < 0) //parseCTRL failed
 	{
 		return 1;
 	}
-	
-	// SET CONTROLS
-	XPLMSetDataf(XPLMDataRefs[11][0],controls[0]);
-	XPLMSetDataf(XPLMDataRefs[11][1],controls[1]);
-	XPLMSetDataf(XPLMDataRefs[11][2],controls[2]);
-	
-	// SET Throttle
-	for ( i=0; i<8; i++ )
+	if (ctrl.aircraft > 19) //Can only handle 19 non-player aircraft right now
 	{
-		throtArray[i]=controls[3];
+		return 2;
 	}
-	XPLMSetDatavf(XPLMDataRefs[25][0],throtArray,0,8);
-	XPLMSetDatavf(XPLMDataRefs[26][0],throtArray,0,8);
-	setDREF(XPLMFindDataRef("sim/flightmodel/engine/ENGN_thro_override"),controls,3,1);
-	
-	// SET Gear/Flaps
-	if ( gear != -1 )
+	if (ctrl.aircraft == 0) //player aircraft
 	{
-		setGEAR(0, gear, 0); // Gear
+		// SET CONTROLS
+		XPLMSetDataf(XPLMDataRefs[11][0], ctrl.pitch);
+		XPLMSetDataf(XPLMDataRefs[11][1], ctrl.roll);
+		XPLMSetDataf(XPLMDataRefs[11][2], ctrl.yaw);
+
+		// SET Throttle
+		for (i = 0; i<8; i++)
+		{
+			thr[i] = ctrl.throttle;
+		}
+		XPLMSetDatavf(XPLMDataRefs[25][0], thr, 0, 8);
+		XPLMSetDatavf(XPLMDataRefs[26][0], thr, 0, 8);
+		setDREF(XPLMFindDataRef("sim/flightmodel/engine/ENGN_thro_override"), thr, 0, 1);
+
+		// SET Gear/Flaps
+		if (ctrl.gear != -1)
+		{
+			setGEAR(0, ctrl.gear, 0); // Gear
+		}
+		if (ctrl.flaps < -999.5 || ctrl.flaps > -997.5) // Flaps
+		{
+			XPLMSetDataf(XPLMDataRefs[13][3], ctrl.flaps);
+		}
 	}
-	if ( flaps < -999.5 || flaps > -997.5 ) // Flaps
+	else //non-player aircraft
 	{
-		XPLMSetDataf(XPLMDataRefs[13][3],flaps);
-	}
-	
+		// SET CONTROLS
+		XPLMSetDataf(multiplayer[ctrl.aircraft][14], ctrl.pitch);
+		XPLMSetDataf(multiplayer[ctrl.aircraft][15], ctrl.roll);
+		XPLMSetDataf(multiplayer[ctrl.aircraft][16], ctrl.yaw);
+
+		// SET Throttle
+		for (i = 0; i<8; i++)
+		{
+			thr[i] = ctrl.throttle;
+		}
+		XPLMSetDatavf(multiplayer[ctrl.aircraft][13], thr, 0, 8);
+
+		// SET Gear/Flaps
+		if (ctrl.gear != -1)
+		{
+			float gear[10];
+			for (int i = 0; i < 10; ++i)
+			{
+				gear[i] = ctrl.gear;
+			}
+			XPLMSetDatavf(multiplayer[ctrl.aircraft][6], gear, 0, 10);
+		}
+		if (ctrl.flaps < -999.5 || ctrl.flaps > -997.5) // Flaps
+		{
+			XPLMSetDataf(multiplayer[ctrl.aircraft][7], ctrl.flaps);
+			XPLMSetDataf(multiplayer[ctrl.aircraft][8], ctrl.flaps);
+		}
+	}	
 	return 0;
 }
 

@@ -36,6 +36,17 @@
             int sock;
         #endif
     };
+
+	typedef struct
+	{
+		float pitch;
+		float roll;
+		float yaw;
+		float throttle;
+		char gear;
+		float flaps;
+		char aircraft;
+	} xpcCtrl;
         
     // Basic Functions
         struct xpcSocket openUDP(unsigned short port, const char *xpIP, unsigned short xpPort);
@@ -58,9 +69,10 @@
         short sendPOSI(struct xpcSocket recfd, short ACNum, short numArgs, float valueArray[]);
         
     // Controls
-        float parseCTRL(const char my_message[], float resultArray[4], short *gear);
-        float readCTRL(struct xpcSocket recfd, float resultArray[4], short *gear);
-        short sendCTRL(struct xpcSocket recfd, short numArgs, float valueArray[]);
+        xpcCtrl parseCTRL(const char data[]);
+		xpcCtrl readCTRL(struct xpcSocket recfd);
+		short sendCTRL(struct xpcSocket recfd, short numArgs, float valueArray[]);
+		short sendpCTRL(struct xpcSocket recfd, short numArgs, float valueArray[], char acNum);
     
     // DREF Manipulation
         short readDREF(struct xpcSocket recfd, float *resultArray[], short arraySizes[]);
@@ -69,7 +81,11 @@
         short requestDREF(struct xpcSocket sendfd, struct xpcSocket recfd, char DREFArray[][100], short DREFSizes[], short listLength,  float *resultArray[], short arraySizes[]);
         int parseGETD(const char my_message[], char *DREFArray[], int DREFSizes[]);
         short parseRequest(const char my_message[], float *resultArray[], short arraySizes[]);
-        short readRequest(struct xpcSocket recfd, float *dataRef[], short arraySizes[], struct sockaddr *recvaddr);
+		short readRequest(struct xpcSocket recfd, float *dataRef[], short arraySizes[], struct sockaddr *recvaddr);
+
+	// Screen Text
+        short sendTEXT(struct xpcSocket sendfd, char* msg, int x, int y);
+
         
     #endif //ifdef _h
         
