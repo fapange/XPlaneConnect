@@ -68,6 +68,7 @@
 //#include "XPLMPlanes.h"
 #include "XPLMProcessing.h"
 #include "XPLMGraphics.h"
+#include "xpcDrawing.h"
 #include "xpcPluginTools.h"
 
 #ifdef _WIN32 /* WIN32 SYSTEM */
@@ -119,11 +120,12 @@ int handleSIMU(char buf[]);
 int handleCONN(char buf[]);
 int handlePOSI(char buf[]);
 int handleCTRL(char buf[]);
-int handleWYPT();
+int handleWYPT(char buf[], int len);
 int handleGETD(char *buf);
 int handleDREF(char *buf);
 int handleVIEW();
 int handleDATA(char *buf, int buflen);
+int handleTEXT(char *buf, int len);
 short handleInput(struct XPCMessage * theMessage);
 
 char setPOSI(short aircraft, float pos[3]);
@@ -189,6 +191,8 @@ PLUGIN_API void XPluginDisable(void)
 	closeUDP(recSocket);
 	closeUDP(sendSocket);
 	updateLog(logmsg,strlen(logmsg));
+
+	XPCClearMessage();
 }
 
 PLUGIN_API int XPluginEnable(void)
@@ -351,7 +355,7 @@ short handleInput(struct XPCMessage * theMessage)
 		}
 		else if (strncmp(theMessage->head,"WYPT",4)==0) // Header = WYPT (Waypoint Draw)
 		{
-			handleWYPT();
+			handleWYPT(theMessage->msg, theMessage->msglen);
 		}
 		else if (strncmp(theMessage->head,"GETD",4)==0) // Header = GETD (Data Request)
 		{
@@ -368,6 +372,10 @@ short handleInput(struct XPCMessage * theMessage)
 		else if (strncmp(theMessage->head,"DATA",4)==0) // Header = DATA (UDP Data)
 		{
 			handleDATA(theMessage->msg, theMessage->msglen);
+		}
+		else if (strncmp(theMessage->head, "TEXT", 4) == 0) // Header = TEXT (Screen message)
+		{
+			handleTEXT(theMessage->msg, theMessage->msglen);
 		}
 		else if ((strncmp(theMessage->head,"DSEL",4)==0) || (strncmp(theMessage->head,"USEL",4)==0)) // Header = DSEL/USEL (Select UDP Send)
 		{
@@ -409,13 +417,13 @@ short handleInput(struct XPCMessage * theMessage)
 		{
 			sendBUF(theMessage->msg,theMessage->msglen); // Send to UDP
 		}
-		else if (strncmp(theMessage->head,"BOAT",4)==0)
+		else if (strncmp(theMessage->head, "BOAT", 4) == 0)
 		{
-			sendBUF(theMessage->msg,theMessage->msglen); // Send to UDP
+			sendBUF(theMessage->msg, theMessage->msglen); // Send to UDP
 		}
 		else
 		{ //unrecognized header
-			sprintf(logmsg,"[EXEC] ERROR: Command %s not recognised",theMessage->head);
+			sprintf(logmsg,"[EXEC] ERROR: Command %s not recognized",theMessage->head);
 			updateLog(logmsg, strlen(logmsg));
 		}
 		current_connection = -1;
@@ -488,6 +496,31 @@ int handleSIMU(char buf[])
 		updateLog(logmsg,strlen(logmsg));
 	}
 	
+	return 0;
+}
+
+int handleTEXT(char *buf, int len)
+{
+	char msg[256] = { 0 };
+	if (len < 14)
+	{
+		updateLog("[TEXT] ERROR: Length less than 14 bytes", 39);
+		return -1;
+	}
+	size_t msgLen = (unsigned char)buf[13];
+	if (msgLen == 0)
+	{
+		XPCClearMessage();
+		updateLog("[TEXT] Text cleared", 19);
+	}
+	else
+	{
+		int x = *((int*)(buf + 5));
+		int y = *((int*)(buf + 9));
+		strncpy(msg, buf + 14, msgLen);
+		XPCSetMessage(x, y, msg);
+		updateLog("[TEXT] Text set", 15);
+	}
 	return 0;
 }
 
@@ -795,14 +828,40 @@ int handleCTRL(char buf[])
 	return 0;
 }
 
-int handleWYPT()
+int handleWYPT(char buf[], int len)
 {
-	char logmsg[100];
-	
 	// UPDATE LOG
-	sprintf(logmsg,"[WYPT] Message Received (Conn %i)- WAYPOINT DRAWING FEATURE UNDER CONSTRUCTION", current_connection+1);
+	char logmsg[100];
+	sprintf(logmsg,"[WYPT] Message Received (Conn %i)", current_connection+1);
 	updateLog(logmsg, strlen(logmsg));
-	
+
+	xpcWypt wypt = parseWYPT(buf);
+	if (wypt.op < 0)
+	{
+		sprintf(logmsg, "[WYPT] Failed to parse command. ERR:%i", wypt.op);
+		updateLog(logmsg, strlen(logmsg));
+		return -1;
+	}
+	else
+	{
+		sprintf(logmsg, "[WYPT] Performing operation %i", wypt.op);
+		updateLog(logmsg, strlen(logmsg));
+	}
+
+	switch (wypt.op)
+	{
+	case xpc_WYPT_ADD:
+		XPCAddWaypoints(wypt.points, wypt.numPoints);
+		break;
+	case xpc_WYPT_DEL:
+		XPCRemoveWaypoints(wypt.points, wypt.numPoints);
+		break;
+	case xpc_WYPT_CLR:
+		XPCClearWaypoints();
+		break;
+	default: //If parseWYPT is doing its job, we shouldn't ever hit this.
+		return -2;
+	}
 	return 0;
 }
 
